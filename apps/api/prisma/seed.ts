@@ -1,0 +1,100 @@
+import 'dotenv/config';
+import bcrypt from 'bcryptjs';
+import { PrismaClient } from '@prisma/client';
+
+const directUrl = process.env.DIRECT_URL;
+const prisma = directUrl
+  ? new PrismaClient({ datasources: { db: { url: directUrl } } })
+  : new PrismaClient();
+const defaultPermissions = [
+  { module: 'companies', action: 'read', name: 'View companies' },
+  { module: 'companies', action: 'create', name: 'Create companies' },
+  { module: 'companies', action: 'update', name: 'Update companies' },
+  { module: 'companies', action: 'delete', name: 'Deactivate companies' },
+  { module: 'companies', action: 'activate', name: 'Activate companies' },
+  { module: 'companies', action: 'backup', name: 'Back up companies' },
+  { module: 'companies', action: 'restore', name: 'Restore company backups' },
+  { module: 'users', action: 'read', name: 'View users' },
+  { module: 'users', action: 'create', name: 'Create users' },
+  { module: 'users', action: 'update', name: 'Update users' },
+  { module: 'users', action: 'delete', name: 'Deactivate users' },
+  { module: 'users', action: 'reset-password', name: 'Reset user passwords' },
+  { module: 'users', action: 'activity-log', name: 'View user activity' },
+  { module: 'roles', action: 'read', name: 'View roles and permissions' },
+  { module: 'roles', action: 'create', name: 'Create roles' },
+  { module: 'roles', action: 'update', name: 'Update roles' },
+  { module: 'roles', action: 'delete', name: 'Delete roles' },
+  { module: 'roles', action: 'assign-permissions', name: 'Assign permissions' },
+];
+
+async function seed(): Promise<void> {
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD;
+  if (!email || !password || password.length < 12) {
+    throw new Error(
+      'SEED_ADMIN_EMAIL and a SEED_ADMIN_PASSWORD of at least 12 characters are required.',
+    );
+  }
+
+  const company = await prisma.company.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000001' },
+    update: {
+      name: process.env.SEED_COMPANY_NAME ?? 'Lifter Industries',
+      code: process.env.SEED_COMPANY_CODE ?? 'LIFTER',
+      isActive: true,
+    },
+    create: {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: process.env.SEED_COMPANY_NAME ?? 'Lifter Industries',
+      code: process.env.SEED_COMPANY_CODE ?? 'LIFTER',
+    },
+  });
+
+  const role = await prisma.role.upsert({
+    where: { companyId_name: { companyId: company.id, name: 'Administrator' } },
+    update: { description: 'Full access to company administration.', isSystem: true },
+    create: {
+      companyId: company.id,
+      name: 'Administrator',
+      description: 'Full access to company administration.',
+      isSystem: true,
+    },
+  });
+
+  await prisma.permission.deleteMany({ where: { roleId: role.id } });
+  await prisma.permission.createMany({
+    data: defaultPermissions.map((permission) => ({ ...permission, roleId: role.id })),
+  });
+
+  const [firstName = 'ERP', lastName = 'Administrator'] = (
+    process.env.SEED_ADMIN_NAME ?? 'ERP Administrator'
+  )
+    .trim()
+    .split(/\s+/, 2);
+  const passwordHash = await bcrypt.hash(password, 12);
+  const administrator = await prisma.user.upsert({
+    where: { email },
+    update: {
+      firstName,
+      lastName,
+      companyId: company.id,
+      isActive: true,
+    },
+    create: { email, passwordHash, firstName, lastName, companyId: company.id },
+  });
+  await prisma.userCompanyRole.upsert({
+    where: {
+      userId_companyId_roleId: { userId: administrator.id, companyId: company.id, roleId: role.id },
+    },
+    update: {},
+    create: { userId: administrator.id, companyId: company.id, roleId: role.id },
+  });
+  console.info(`Seeded administrator ${email} for ${company.name}.`);
+}
+
+seed()
+  .catch((error: unknown) => {
+    console.error('Database seed failed.', error);
+    process.exitCode = 1;
+  })
+  .finally(async () => prisma.$disconnect());

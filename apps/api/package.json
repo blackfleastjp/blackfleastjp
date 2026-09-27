@@ -1,31 +1,41 @@
 {
-  "name": "@erp/api",
+  "name": "@lifter-erp/api",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --platform node --target node20 --external @prisma/client --out-dir dist",
-    "start": "node dist/index.js"
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "tsx --test tests/validation.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.896.0",
-    "@erp/config": "*",
-    "@erp/shared": "*",
-    "@erp/types": "*",
-    "@erp/validation": "*",
-    "@prisma/client": "^6.16.2",
-    "@vercel/blob": "^2.0.0",
-    "bcryptjs": "^3.0.2",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
-    "express": "^5.1.0",
-    "express-rate-limit": "^8.1.0",
-    "helmet": "^8.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
-    "pino": "^9.9.4",
-    "pino-http": "^10.5.0",
-    "zod": "^4.1.8"
+    "morgan": "^1.10.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/morgan": "^1.9.9"
   }
 }

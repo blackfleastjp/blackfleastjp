@@ -1,41 +1,20 @@
-import type { RequestHandler } from "express";
-import { prisma } from "../lib/prisma.js";
-import { AppError, unauthorized } from "../lib/errors.js";
-import { companyIdParamsSchema } from "@erp/validation";
+import type { RequestHandler } from 'express';
+import { prisma } from '../db/prisma';
+import { HttpError } from '../utils/http-error';
 
-export const requireCompanyContext: RequestHandler = async (request, _response, next) => {
-  if (!request.auth) return next(unauthorized());
-  const companyId = request.header("X-Company-Id");
-  if (!companyId)
-    return next(new AppError(400, "COMPANY_REQUIRED", "Select a company to continue"));
-  const parsedCompany = companyIdParamsSchema.safeParse({ companyId });
-  if (!parsedCompany.success)
-    return next(new AppError(400, "INVALID_COMPANY", "Company context is invalid"));
-
-  try {
-    const memberships = await prisma.userCompanyRole.findMany({
-      where: {
-        userId: request.auth.userId,
-        companyId,
-        company: { isActive: true },
-        user: { isActive: true },
-        role: { companyId },
-      },
-      select: {
-        role: { select: { permissions: { select: { permission: { select: { key: true } } } } } },
-      },
-    });
-    if (memberships.length === 0)
-      return next(new AppError(403, "COMPANY_FORBIDDEN", "You do not have access to this company"));
-    const permissions = new Set(
-      memberships.flatMap((membership) =>
-        membership.role.permissions.map((item) => item.permission.key),
-      ),
-    );
-    request.auth.companyId = companyId;
-    request.auth.permissions = permissions;
-    next();
-  } catch (error) {
-    next(error);
+export const requireActiveCompany: RequestHandler = (request, _response, next) => {
+  const companyId = request.auth?.companyId;
+  if (!companyId) {
+    next(new HttpError(401, 'Authentication is required.'));
+    return;
   }
+
+  void prisma.company
+    .findUnique({ where: { id: companyId }, select: { isActive: true } })
+    .then((company) => {
+      if (!company) throw new HttpError(404, 'The selected company was not found.');
+      if (!company.isActive) throw new HttpError(409, 'The selected company is inactive.');
+      next();
+    })
+    .catch(next);
 };

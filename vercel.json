@@ -1,8 +1,12 @@
 {
-  "buildCommand": "npm run build -w @erp/web",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
   "outputDirectory": "apps/web/dist",
-  "functions": {
-    "api/[...path].ts": { "maxDuration": 10 }
-  },
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Company {
+  id                 String            @id @default(uuid()) @db.Uuid
+  name               String
+  code               String            @unique
+  address            String?
+  city               String?
+  state              String?
+  pincode            String?
+  country            String            @default("India")
+  gstin              String?
+  pan                String?
+  email              String?
+  phone              String?
+  logo               String?
+  financialYearStart DateTime?         @db.Date
+  financialYearEnd   DateTime?         @db.Date
+  booksBeginningDate DateTime?         @db.Date
+  baseCurrency       String            @default("INR")
+  enableAccounting   Boolean           @default(false)
+  enableInventory    Boolean           @default(false)
+  enableGst          Boolean           @default(false)
+  enablePayroll      Boolean           @default(false)
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  users              User[]
+  roles              Role[]
+  userCompanyRoles   UserCompanyRole[]
+  activityLogs       ActivityLog[]
+  backups            CompanyBackup[]
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.Uuid
+  email            String            @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  employeeCode     String?
+  department       String?
+  designation      String?
+  mobile           String?
+  alternateEmail   String?
+  dateOfJoining    DateTime?         @db.Date
+  isActive         Boolean           @default(true)
+  companyId        String            @db.Uuid
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  userCompanyRoles UserCompanyRole[]
+  refreshTokens    RefreshToken[]
+  activityLogs     ActivityLog[]
+  backups          CompanyBackup[]   @relation("CompanyBackupCreator")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([companyId, employeeCode])
+  @@index([companyId, isActive])
+  @@index([department])
+}
+
+model Role {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  description      String?
+  companyId        String            @db.Uuid
+  isSystem         Boolean           @default(false)
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userCompanyRoles UserCompanyRole[]
+  permissions      Permission[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([companyId, name])
+  @@unique([id, companyId])
+  @@index([companyId])
+}
+
+model Permission {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  module    String
+  action    String
+  roleId    String   @db.Uuid
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([roleId, module, action])
+  @@index([module, action])
+}
+
+model UserCompanyRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  companyId String   @db.Uuid
+  roleId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId, companyId], references: [id, companyId], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId, roleId])
+  @@index([userId, companyId])
+  @@index([roleId, companyId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  jti       String    @unique
+  tokenHash String    @unique
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String?  @db.Uuid
+  actorUserId String   @db.Uuid
+  entity      String
+  entityId    String
+  action      String
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actor       User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, entity, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model CompanyBackup {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @db.Uuid
+  createdById String   @db.Uuid
+  name        String
+  checksum    String
+  payload     Json
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("CompanyBackupCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, createdAt])
+}

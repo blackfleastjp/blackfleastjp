@@ -1,100 +1,148 @@
-# Ledgerline ERP
+# Lifter ERP
 
-Ledgerline is a TypeScript monorepo for a responsive, multi-company ERP foundation. It includes a React client, a Vercel-compatible Express API, PostgreSQL/Prisma persistence, company-scoped authorization, rotating cookie-backed sessions, audit logging, and shared validation/types.
+A TypeScript monorepo containing a React operations console and an Express API backed by PostgreSQL and Prisma.
 
 ## Requirements
 
-- Node.js 24 (see `.nvmrc`) and npm 11 or compatible
-- Docker Desktop, or a PostgreSQL 16 instance
-- A PostgreSQL connection string available to the application as `DATABASE_URL` and to Prisma migrations as `DIRECT_URL`
+- Node.js 20 or newer and npm 10 or newer
+- PostgreSQL 15 or Docker with Docker Compose
 
-## Local Setup
+## Local development
 
-1. Install dependencies with `npm install`.
-2. Copy `.env.example` to `.env` and fill in the database connection, two independent random JWT secrets (at least 32 characters each), and the local PostgreSQL variables. Keep `.env` out of version control.
-3. Verify the server configuration with `npm run env:check`.
-4. Start PostgreSQL with `docker compose up -d postgres` after setting `POSTGRES_DB`, `POSTGRES_USER`, and a strong `POSTGRES_PASSWORD` in `.env`.
-5. Generate the Prisma client and apply migrations with `npm run prisma:generate` and `npm run prisma:migrate:dev`.
-6. Load permission catalog records with `npm run prisma:seed`.
-7. Start the API and web app with `npm run dev`. The API listens on the `PORT` supplied by the host (3001 locally); set `API_BASE_URL` in `.env` to the API origin so Vite can proxy `/api`. The web app uses `/api` on the same origin unless `VITE_API_URL` is configured for a separate deployment.
-8. Open the Vite address printed by the web development server and create the first company administrator from the registration screen.
+1. Install dependencies from the repository root with `npm install`.
+2. Run `npm run setup:env`. This creates `apps/api/.env`, `apps/web/.env`, and a root `.env` for Docker Compose, generates unique JWT/database/admin secrets, and never overwrites existing environment files.
+3. To run everything with Docker, make sure Docker Desktop is running and execute `docker compose up --build -d`. Open http://localhost:8080; the API health endpoint is http://localhost:4000/api/health. The generated administrator email/password are in the root `.env`.
+4. To run the apps from local Node processes using Compose PostgreSQL, run `docker compose up -d db`; PostgreSQL is bound to loopback port 5433. Then run `npm run db:generate`, `npm run db:migrate`, and `npm run db:seed` from the repository root, followed by `npm run dev`. The seed command loads `apps/api/.env` automatically. On a fresh database, its admin password is in `apps/api/.env`; if Compose initialized the database first, use the existing admin password from the root `.env` because reseeding preserves it.
+5. For a separately installed PostgreSQL server, open `apps/api/.env` in VS Code or with `notepad apps/api/.env`, set `DATABASE_URL` to that server's credentials, then run the migration/seed commands.
+6. Vite prints the frontend URL (normally http://localhost:5173); the API health endpoint is http://localhost:4000/api/health.
 
-The API fails at startup with a list of missing or invalid required environment values. Local `STORAGE_PROVIDER=local` writes files under the ignored `storage/` directory. Never use that provider in production.
+The equivalent manual PowerShell file-copy commands are `Copy-Item apps/api/.env.example apps/api/.env` and `Copy-Item apps/web/.env.example apps/web/.env`. To open a file, use `notepad apps/api/.env` or open it in VS Code; do not type `apps/api/.env` by itself at the PowerShell prompt. If files already exist, edit them instead of copying over them. Generated `.env` files contain credentials and must never be committed or shared.
 
-## Environment
+## Browse database tables
 
-`.env.example` lists runtime, migration, browser, authentication, cookie, CORS, object storage, email, tax integration, monitoring, and logging configuration. Server values are parsed by the Zod schema in `packages/config/src/env.ts`; secrets are never shipped to the browser. The Vite client only reads `VITE_API_URL`.
+The Compose stack includes Adminer, bound only to this computer. Open http://localhost:8081 and sign in with system `PostgreSQL`, server `db`, database `lifter_erp`, username `lifter`, and the `POSTGRES_PASSWORD` value from the root `.env` (open it with `notepad .env`). Select a table from the left to browse its rows, or use the SQL command page for read-only queries. Avoid editing database records directly; use the ERP API so validation, tenant scoping, and audit logs remain in effect.
 
-Use different access and refresh secrets in every environment. Generate secrets locally with a cryptographically secure random generator; do not use the test setup values as production secrets. For same-domain deployments, leave `VITE_API_URL` unset so the browser uses relative `/api` requests. For separate deployments, set it to the API base URL and configure the API's `CORS_ORIGINS` with the exact frontend origins.
+The API applies Prisma migrations using `db:migrate` in development. `db:deploy` is intended for deployed environments. The seed command is safe to rerun and preserves the existing administrator password; use the password-reset flow to change it.
 
-## PostgreSQL and Prisma
+Database Access Guide
 
-The compose file starts PostgreSQL 16 and reads its database name, user, and password from the environment. `DATABASE_URL` is the runtime connection and `DIRECT_URL` is the direct migration connection; point both at the appropriate PostgreSQL service for local development. Production deployments should use a pooled runtime URL where applicable and a direct database URL for migrations.
+Ye guide first-time user ke liye hai. Isse PostgreSQL database ko Adminer ke through browser me open karke tables/data dekha ja sakta hai.
 
-```sh
-npm run prisma:generate
-npm run prisma:validate
-npm run prisma:format
-npm run prisma:migrate:dev
-npm run prisma:seed
-npm run prisma:migrate:deploy
-```
+Step 1 — Project Folder Open Karo
 
-The Prisma schema uses relational constraints and Decimal-ready PostgreSQL storage conventions. No financial amount calculations are currently exposed by the foundation API. Database access is centralized through a hot-reload-safe Prisma singleton.
+PowerShell me project folder me jao:
 
-## Development Checks
+cd "C:\Users\jayp1\OneDrive\Desktop\LIFTER INDUSTRIES WORKSPACE\LIFTER-INDUSTRIES-WORKSPACE"
 
-```sh
-npm run format:check
-npm run lint
-npm run typecheck
-npm run prisma:validate
-npm run env:check
-npm run test
-npm run test:e2e
-npm run build
-```
+Step 2 — .env File Setup Karo
 
-Browser tests require Chromium and `PLAYWRIGHT_BASE_URL` pointing to a running web app. Install the browser with `npx playwright install chromium`. API tests use a mocked Prisma boundary; readiness behavior is checked without requiring a running database, while `GET /api/ready` checks the real connection at runtime.
+Agar root folder me .env nahi hai:
 
-The GitHub Actions workflow installs dependencies, checks formatting/lint/types, generates and validates Prisma, runs API/environment tests and Playwright smoke tests, builds both apps, and runs Gitleaks secret scanning. It provides a temporary PostgreSQL service for schema validation.
+Copy-Item .\apps\api\.env .\.env
 
-## API
+Step 3 — Database Start Karo
+docker compose up -d db database-ui
 
-- `GET /api/health` reports process liveness.
-- `GET /api/ready` executes a PostgreSQL query before reporting readiness.
-- `POST /api/auth/register` creates a company administrator and initial company.
-- `POST /api/auth/login`, `POST /api/auth/refresh`, and `POST /api/auth/logout` manage sessions.
-- `GET /api/auth/me` returns the authenticated account and accessible companies.
-- `GET /api/companies` provides the caller's paginated company list.
-- `GET /api/dashboard/summary`, `/api/dashboard/users`, and `/api/dashboard/activity` require a valid `X-Company-Id`, authenticated membership, and the relevant permission.
+Step 4 — Check Karo
+docker compose ps
 
-Access tokens are returned to the browser and held in memory only. Refresh tokens are hashed in PostgreSQL, rotated transactionally, and stored in an HttpOnly cookie. The browser client performs one shared refresh attempt after a protected request receives a 401, retries that request once, and redirects to sign-in if refresh fails. API responses include a request ID and use the shared success/error envelope.
 
-Company IDs from the browser are treated only as context selectors; the API verifies membership and loads permissions for every company-scoped request. Pagination is capped at 100 rows, and list endpoints support bounded search.
+db aur database-ui ke saamne Up dikhna chahiye.
 
-## Files and Reports
+Step 5 — Database Open Karo
 
-The People directory can preview CSV and Excel workbooks with a 10 MB/1,000-row limit. It does not write imported records. The dashboard and directory can export PDF reports. API storage helpers support local development, S3-compatible object storage, and private Vercel Blob storage; production configuration rejects local filesystem storage. Persistent uploads belong in object storage, never the Vercel function filesystem.
+Browser me ye address open karo:
 
-## Vercel Deployment
+http://localhost:8081
 
-1. Import the repository into Vercel with the repository root as the project root.
-2. Configure a PostgreSQL provider and set `DATABASE_URL` and `DIRECT_URL` in the Vercel project. Apply migrations in the deployment pipeline with `npm run prisma:migrate:deploy`.
-3. Set independent `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values, `COOKIE_SECURE=true`, an appropriate `COOKIE_SAME_SITE`, and exact `CORS_ORIGINS` values. Production startup rejects missing CORS, insecure cookies, and local storage.
-4. Configure production storage as `s3` or `vercel-blob`. S3 requires bucket, region, endpoint when using an S3-compatible service, and credentials. Vercel Blob uses `STORAGE_ACCESS_KEY` for its read/write token.
-5. Set `APP_URL`, email/tax provider values required by enabled integrations, and observability configuration. Keep secrets in Vercel's encrypted environment settings.
-6. Leave `VITE_API_URL` unset when the web and API share the Vercel domain. For separate projects, set it to the API base URL and allow the frontend origin in `CORS_ORIGINS`.
-7. Add the same required server settings to Preview and Production scopes. Preview should use isolated database/storage resources and preview-specific secrets; production secrets must not be copied into preview.
 
-`vercel.json` builds the Vite output and declares the catch-all serverless function. Vercel serves the API function route separately from the React SPA fallback; API requests are handled by `api/[...path].ts`, while client routes resolve to the web entry point.
+Adminer login screen par ye details enter karo:
 
-## Troubleshooting
+System:   PostgreSQL
+Server:   db
+Username: lifter
+Password: -g_JhXqoIQulGsxOLO3xjmY4p2RbXiFw
+Database: lifter_erp
 
-- **Environment validation fails:** compare `.env` with `.env.example`; ensure database URLs and independent JWT secrets are set, and enable secure cookies plus exact CORS origins for production.
-- **Prisma cannot connect:** verify PostgreSQL health and credentials, then check that `DATABASE_URL` reaches the runtime service and `DIRECT_URL` reaches the migration service.
-- **Browser requests fail locally:** set `API_BASE_URL` for the Vite proxy or set `VITE_API_URL` for a separate API. Ensure the API `CORS_ORIGINS` contains the exact frontend origin when using a separate origin.
-- **Refresh cookie is not sent across origins:** use HTTPS, `COOKIE_SECURE=true`, a compatible SameSite policy, credentials-enabled CORS, and matching cookie domain configuration.
-- **Vercel reports missing files after upload:** select an S3-compatible or Vercel Blob provider; serverless local files are ephemeral.
-- **A user cannot view a company:** confirm an active `UserCompanyRole` membership and the required role permission in PostgreSQL.
-- **Playwright cannot connect:** start the web development server and set `PLAYWRIGHT_BASE_URL` to its printed origin before invoking `npm run test:e2e`.
+Important
+
+Adminer ke Server field me:
+
+db
+
+
+likhna hai.
+
+localhost, localhost:5433 ya 127.0.0.1 mat likhna.
+
+Step 6 — Data Dekho
+
+Login ke baad left side me database/tables dikhengi.
+
+Wahan se tables open karke companies, users, roles aur doosra database data dekh sakte ho.
+
+Quick Commands
+
+Future me database dobara open karna ho to normally sirf:
+
+cd "C:\Users\jayp1\OneDrive\Desktop\LIFTER INDUSTRIES WORKSPACE\LIFTER-INDUSTRIES-WORKSPACE"
+docker compose up -d db database-ui
+docker compose ps
+
+
+Phir browser me:
+
+http://localhost:8081
+
+Database Credentials
+System:   PostgreSQL
+Server:   db
+Username: lifter
+Password: -g_JhXqoIQulGsxOLO3xjmY4p2RbXiFw
+Database: lifter_erp
+
+## Company and user management
+
+Company, user, and role endpoints are mounted at `/api/companies`, `/api/users`, and `/api/roles`. Requests require a bearer access token. The API selects the active tenant from `X-Company-Id` only after confirming the signed-in user has a `UserCompanyRole` assignment in that company. The default context is the user's home company. Role grants are stored as company-owned module/action permissions and checked on every protected operation.
+
+Company endpoints support CRUD, activation, and backup/restore. User endpoints support filtered pagination, profile/role changes, deactivation, password resets, and per-user activity history. Role endpoints include a permission catalog and reject grants the acting user does not hold. Create/update/deactivate/role changes and backup operations are written to `ActivityLog` transactionally.
+
+Company backups are checksummed logical snapshots stored in the same PostgreSQL database. They contain company configuration, role grants, and user-to-role assignments; they deliberately exclude password credentials. They are useful for restoring tenant configuration, but are not physical database dumps or offsite disaster-recovery backups. Use PostgreSQL's backup tooling and independent storage for disaster recovery.
+
+The company wizard validates Indian GSTIN, PAN, PIN code, and phone formats. User creation validates email and Indian mobile formats. User and role lists are paginated/scoped to the active company; the frontend sends the selected company context on every API request.
+
+## Docker Compose
+
+`npm run setup:env` creates the root Compose `.env` with random local credentials. Then run `docker compose up --build -d`. Compose waits for PostgreSQL, applies migrations, seeds the administrator, and then starts the API. The web app is available at http://localhost:8080 and the API health endpoint at http://localhost:4000/api/health. Read the generated admin email/password from the root `.env` when signing in.
+
+## Vercel deployment
+
+Create a Vercel project with this repository as its root. Use `npm ci` as the install command, `npm run build` as the build command, and `apps/web/dist` as the output directory. The build generates Prisma Client and builds both workspaces. `api/[...path].ts` exposes the existing Express routes as a Vercel Function; Vercel serves the React app for other paths. Do not configure a separate start command.
+
+Add these Vercel environment variables for each environment where the app will run:
+
+- `DATABASE_URL`: the hosted PostgreSQL provider's pooled/connection-pool URL for serverless API requests. It must not use the Docker hostname `db`.
+- `DIRECT_URL`: the same database's direct, non-pooled connection URL for Prisma migrations. This also must not use `db:5432`.
+- `ACCESS_TOKEN_SECRET` and `REFRESH_TOKEN_SECRET`: different random secrets of at least 32 characters.
+- `COOKIE_SECURE=true`.
+- `CORS_ORIGIN`: comma-separated production/custom frontend origins if using a custom domain. Vercel deployment and production project URLs are also allowed automatically.
+- `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`: set these when initializing/seeding the database; use a strong password of at least 12 characters.
+
+Leave `VITE_API_URL` unset or set it to `/api` so the frontend calls the same-origin Vercel Function. `apps/web/vite.config.ts` continues to proxy `/api` to `http://localhost:4000` during `npm run dev`.
+
+Run `npm run db:deploy` from a trusted machine or CI job with the Vercel database environment variables available before deploying schema changes. For a new database, run `npm run db:seed --workspace @lifter-erp/api` once after migrations. Migrations and seeding use `DIRECT_URL`; seeding falls back to `DATABASE_URL` when only one connection string is configured. Seeding is not part of the Vercel build or function startup, so deployments do not unexpectedly modify production data. Keep the pooled URL for application traffic. For providers without a pooler, both URL variables can use the same hosted PostgreSQL connection string.
+
+## Workspace commands
+
+- `npm run build`: build API and frontend
+- `npm run typecheck`: type-check both workspaces
+- `npm run setup:env`: create local environment files without overwriting existing files
+- `npm run lint`: lint TypeScript and TSX sources
+- `npm run format:check`: verify formatting
+- `npm test`: run API validation tests
+- `npm run db:generate`: generate the Prisma client
+- `npm run db:migrate`: create/apply a development migration
+- `npm run db:deploy`: apply committed migrations
+- `npm run db:seed`: create the configured initial company and administrator
+
+Refresh tokens are signed JWTs, stored as SHA-256 hashes in PostgreSQL, rotated on use, and sent only in an HTTP-only cookie. Access tokens are short-lived and held in frontend memory. Use HTTPS and set `COOKIE_SECURE=true` outside local development.
