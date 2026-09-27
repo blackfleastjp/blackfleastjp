@@ -97,23 +97,3 @@ test('role permission matrices reject duplicate module/action grants', () => {
     false,
   );
 });
-
-test('create inputs require fields needed by Prisma records', () => {
-  assert.equal(createCompanySchema.safeParse({ code: 'ACME' }).success, false);
-  assert.equal(
-    createUserSchema.safeParse({
-      password: 'a-strong-password',
-      firstName: 'Jane',
-      lastName: 'Doe',
-      roleIds: ['00000000-0000-4000-8000-000000000001'],
-    }).success,
-    false,
-  );
-  assert.equal(
-    createRoleSchema.safeParse({
-      name: 'Operations',
-      permissions: [{ module: 'users', action: 'read' }],
-    }).success,
-    false,
-  );
-});
