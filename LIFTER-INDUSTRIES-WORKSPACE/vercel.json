@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build -w @erp/web",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/[...path].ts": { "maxDuration": 60 }
+  },
+  "crons": [{ "path": "/api/jobs/process", "schedule": "* * * * *" }],
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

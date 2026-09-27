@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: erp_ci
+          POSTGRES_USER: erp_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U erp_ci -d erp_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run prisma:generate
+      - name: Validate Prisma schema
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: ${{ job.services.postgres.ports[5432] }}
+          PGUSER: erp_ci
+          PGDATABASE: erp_ci
+        run: |
+          export DATABASE_URL="postgresql://${PGUSER}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+          export DIRECT_URL="$DATABASE_URL"
+          npm run prisma:validate
+      - run: npm run typecheck
+      - run: npm run test
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Prepare browser test address
+        run: |
+          port=$(node --input-type=module -e 'import net from "node:net"; const server = net.createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });')
+          echo "PLAYWRIGHT_BASE_URL=http://127.0.0.1:${port}" >> "$GITHUB_ENV"
+      - name: Run browser tests
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.PLAYWRIGHT_BASE_URL }}
+        run: |
+          npx vite --config apps/web/vite.config.ts --root apps/web --host 127.0.0.1 --port "${PLAYWRIGHT_BASE_URL##*:}" &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          npx playwright test
+      - run: npm run build
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
